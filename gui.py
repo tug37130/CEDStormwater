@@ -1,75 +1,70 @@
 import tkinter as tk
 from tkinter import filedialog
+from api_handler import (
+    fetch_geojson, fetch_municipal_boundary, fetch_parcels,
+    fetch_roads, fetch_wetlands
+)
+from geo_processor import clip_to_boundary
+from file_manager import save_shapefile
+from arcgis_online import create_arcgis_group, add_users, upload_shapefiles
+from logger import log_operations
 
-# Function to open a file dialog for selecting a CSV file
-def browse_csv():
-    filename = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
-    csv_entry.delete(0, tk.END)  # Clear any existing text in the entry widget
-    csv_entry.insert(0, filename)  # Insert the selected filename into the entry widget
+def launch_gui():
+    root = tk.Tk()
+    root.title("Stormwater Project Automation")
 
-# Function to open a directory dialog for selecting an output path
-def browse_output_path():
-    path = filedialog.askdirectory()
-    output_path_entry.delete(0, tk.END)  # Clear any existing text in the entry widget
-    output_path_entry.insert(0, path)  # Insert the selected path into the entry widget
+    def select_output_folder():
+        folder_selected = filedialog.askdirectory()
+        output_folder.set(folder_selected)
 
-# Function to handle submission of the form
-def submit():
-    township_name = township_name_entry.get()  # Get the text entered in the township name entry widget
-    csv_file = csv_entry.get()  # Get the text entered in the CSV file entry widget
-    output_path = output_path_entry.get()  # Get the text entered in the output path entry widget
-    project_name = project_name_entry.get()  # Get the text entered in the project name entry widget
+    def select_county_outline():
+        file_selected = filedialog.askopenfilename()
+        county_outline.set(file_selected)
 
-    # Optionally, print the values entered by the user
-    #print("Township Name:", township_name)
-    #print("CSV File:", csv_file)
-    #print("Output Path:", output_path)
-    #print("Project Name:", project_name)
+    # Define and arrange widgets here
+    tk.Label(root, text="API Endpoints (comma separated)").grid(row=0, column=0)
+    api_endpoints = tk.Entry(root, width=50)
+    api_endpoints.grid(row=0, column=1)
 
-# Create the main Tkinter window
-root = tk.Tk()
-root.title("SW Project Generator")  # Set the title of the window
+    tk.Label(root, text="County Outline File").grid(row=1, column=0)
+    county_outline = tk.StringVar()
+    tk.Entry(root, textvariable=county_outline, width=50).grid(row=1, column=1)
+    tk.Button(root, text="Browse", command=select_county_outline).grid(row=1, column=2)
 
-# Increase the size of the window
-root.geometry("292x175")
+    tk.Label(root, text="Municipality Code").grid(row=2, column=0)
+    municipality_code = tk.Entry(root, width=50)
+    municipality_code.grid(row=2, column=1)
 
-# Calculate the center of the screen
-screen_width = root.winfo_screenwidth()
-screen_height = root.winfo_screenheight()
-x = (screen_width - 500) // 2
-y = (screen_height - 250) // 2
+    tk.Label(root, text="Output Folder").grid(row=3, column=0)
+    output_folder = tk.StringVar()
+    tk.Entry(root, textvariable=output_folder, width=50).grid(row=3, column=1)
+    tk.Button(root, text="Browse", command=select_output_folder).grid(row=3, column=2)
 
-# Set the window to be centered on the screen
-root.geometry("+{}+{}".format(x, y))
+    tk.Button(root, text="Run", command=lambda: run_process(api_endpoints.get(), county_outline.get(), municipality_code.get(), output_folder.get())).grid(row=4, column=1)
 
-# Create labels and entry widgets for each input field
-township_name_label = tk.Label(root, text="Township Name:")
-township_name_label.grid(row=0, column=0, sticky="e")
-township_name_entry = tk.Entry(root)
-township_name_entry.grid(row=0, column=1, padx=5, pady=5)
+    root.mainloop()
 
-csv_label = tk.Label(root, text="Users .CSV File:")
-csv_label.grid(row=1, column=0, sticky="e")
-csv_entry = tk.Entry(root)
-csv_entry.grid(row=1, column=1, padx=5, pady=5)  # Add padding to the CSV entry widget
-csv_button = tk.Button(root, text="Browse", command=browse_csv)
-csv_button.grid(row=1, column=2, padx=5, pady=5)  # Add padding to the Browse button
+def run_process(api_endpoints, county_outline, municipality_code, output_folder):
+    endpoints = api_endpoints.split(',')
+    geojsons = [fetch_geojson(url) for url in endpoints]
+    municipal_boundary = fetch_municipal_boundary(municipality_code)
+    parcels = fetch_parcels(municipal_boundary)
 
-output_path_label = tk.Label(root, text="Output Path:")
-output_path_label.grid(row=2, column=0, sticky="e")
-output_path_entry = tk.Entry(root)
-output_path_entry.grid(row=2, column=1, padx=5, pady=5)  # Add padding to the output path entry widget
-output_path_button = tk.Button(root, text="Browse", command=browse_output_path)
-output_path_button.grid(row=2, column=2, padx=5, pady=5)  # Add padding to the Browse button
+    # Fetch ArcGIS REST API data
+    roads = fetch_roads("https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/ArcGIS/rest/services/Tran_road/FeatureServer/0", municipal_boundary)
+    wetlands = fetch_wetlands("https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands/MapServer/0", municipal_boundary)
+    # Add more ArcGIS REST API data requests here if needed
 
-project_name_label = tk.Label(root, text="Project Name:")
-project_name_label.grid(row=3, column=0, sticky="e")
-project_name_entry = tk.Entry(root)
-project_name_entry.grid(row=3, column=1, padx=5, pady=5)
+    # Clip all data to the municipal boundary
+    clipped_geojsons = [clip_to_boundary(geojson, municipal_boundary) for geojson in geojsons]
+    clipped_geojsons.append(clip_to_boundary(municipal_boundary, municipal_boundary))
+    clipped_geojsons.append(clip_to_boundary(parcels, municipal_boundary))
+    clipped_geojsons.append(clip_to_boundary(roads, municipal_boundary))
+    clipped_geojsons.append(clip_to_boundary(wetlands, municipal_boundary))
+    # Add more clipped ArcGIS REST API data here if needed
 
-# Create a submit button to submit the form
-submit_button = tk.Button(root, text="Submit", command=submit)
-submit_button.grid(row=4, column=1, pady=10)
-
-# Start the Tkinter event loop
-root.mainloop()
+    shapefiles = [save_shapefile(geojson, output_folder) for geojson in clipped_geojsons]
+    group = create_arcgis_group()
+    add_users(group, "users.xlsx")
+    upload_shapefiles(group, shapefiles)
+    log_operations(api_endpoints, output_folder, group.title)
