@@ -1,9 +1,5 @@
 import requests
-
-def fetch_geojson(url):
-    response = requests.get(url)
-    response.raise_for_status()
-    return response.json()
+import json
 
 def fetch_municipal_boundary(municipality_code):
     url = f"https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/arcgis/rest/services/NJ_Municipalities_3857/FeatureServer/0/query?where=MUN_CODE%20%3D%20'{municipality_code}'&outFields=*&outSR=4326&f=json"

@@ -1,7 +1,7 @@
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import simpledialog, filedialog
 from api_handler import (
-    fetch_geojson, fetch_municipal_boundary, fetch_parcels,
+    fetch_municipal_boundary, fetch_parcels,
     fetch_roads, fetch_wetlands
 )
 from geo_processor import clip_to_boundary
@@ -11,60 +11,48 @@ from logger import log_operations
 
 def launch_gui():
     root = tk.Tk()
-    root.title("Stormwater Project Automation")
+    root.title("Geo Processing Application")
 
     def select_output_folder():
         folder_selected = filedialog.askdirectory()
         output_folder.set(folder_selected)
 
-    def select_county_outline():
-        file_selected = filedialog.askopenfilename()
-        county_outline.set(file_selected)
-
     # Define and arrange widgets here
-    tk.Label(root, text="API Endpoints (comma separated)").grid(row=0, column=0)
-    api_endpoints = tk.Entry(root, width=50)
-    api_endpoints.grid(row=0, column=1)
-
-    tk.Label(root, text="County Outline File").grid(row=1, column=0)
-    county_outline = tk.StringVar()
-    tk.Entry(root, textvariable=county_outline, width=50).grid(row=1, column=1)
-    tk.Button(root, text="Browse", command=select_county_outline).grid(row=1, column=2)
-
-    tk.Label(root, text="Municipality Code").grid(row=2, column=0)
+    tk.Label(root, text="Municipality Code").grid(row=0, column=0)
     municipality_code = tk.Entry(root, width=50)
-    municipality_code.grid(row=2, column=1)
+    municipality_code.grid(row=0, column=1)
 
-    tk.Label(root, text="Output Folder").grid(row=3, column=0)
+    tk.Label(root, text="Output Folder").grid(row=1, column=0)
     output_folder = tk.StringVar()
-    tk.Entry(root, textvariable=output_folder, width=50).grid(row=3, column=1)
-    tk.Button(root, text="Browse", command=select_output_folder).grid(row=3, column=2)
+    tk.Entry(root, textvariable=output_folder, width=50).grid(row=1, column=1)
+    tk.Button(root, text="Browse", command=select_output_folder).grid(row=1, column=2)
 
-    tk.Button(root, text="Run", command=lambda: run_process(api_endpoints.get(), county_outline.get(), municipality_code.get(), output_folder.get())).grid(row=4, column=1)
+    tk.Button(root, text="Run", command=lambda: run_process(municipality_code.get(), output_folder.get())).grid(row=2, column=1)
 
     root.mainloop()
 
-def run_process(api_endpoints, county_outline, municipality_code, output_folder):
-    endpoints = api_endpoints.split(',')
-    geojsons = [fetch_geojson(url) for url in endpoints]
-    municipal_boundary = fetch_municipal_boundary(municipality_code)
-    parcels = fetch_parcels(municipal_boundary)
+def run_process(municipality_code, output_folder):
+    username = simpledialog.askstring("Input", "Enter your ArcGIS Online username:")
+    password = simpledialog.askstring("Input", "Enter your ArcGIS Online password:", show='*')
+    group_name = simpledialog.askstring("Input", "Enter the name for the new ArcGIS Online group:")
 
-    # Fetch ArcGIS REST API data
-    roads = fetch_roads("https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/ArcGIS/rest/services/Tran_road/FeatureServer/0", municipal_boundary)
-    wetlands = fetch_wetlands("https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands/MapServer/0", municipal_boundary)
-    # Add more ArcGIS REST API data requests here if needed
+    municipal_boundary = fetch_municipal_boundary(municipality_code)
+    parcels_data = fetch_parcels(municipality_code)
+    roads_data = fetch_roads("https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/ArcGIS/rest/services/Tran_road/FeatureServer/0", municipal_boundary)
+    wetlands_data = fetch_wetlands("https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/ArcGIS/rest/services/Wetlands/FeatureServer/0", municipal_boundary)
 
     # Clip all data to the municipal boundary
-    clipped_geojsons = [clip_to_boundary(geojson, municipal_boundary) for geojson in geojsons]
+    clipped_geojsons = []
     clipped_geojsons.append(clip_to_boundary(municipal_boundary, municipal_boundary))
-    clipped_geojsons.append(clip_to_boundary(parcels, municipal_boundary))
-    clipped_geojsons.append(clip_to_boundary(roads, municipal_boundary))
-    clipped_geojsons.append(clip_to_boundary(wetlands, municipal_boundary))
-    # Add more clipped ArcGIS REST API data here if needed
+    clipped_geojsons.append(clip_to_boundary(parcels_data, municipal_boundary))
+    clipped_geojsons.append(clip_to_boundary(roads_data, municipal_boundary))
+    clipped_geojsons.append(clip_to_boundary(wetlands_data, municipal_boundary))
 
-    shapefiles = [save_shapefile(geojson, output_folder) for geojson in clipped_geojsons]
-    group = create_arcgis_group()
+    shapefiles = [save_shapefile(gdf, output_folder) for gdf in clipped_geojsons]
+    group = create_arcgis_group(username, password, group_name)
     add_users(group, "users.xlsx")
     upload_shapefiles(group, shapefiles)
-    log_operations(api_endpoints, output_folder, group.title)
+    log_operations(municipality_code, output_folder, group.title)
+
+if __name__ == "__main__":
+    launch_gui()
