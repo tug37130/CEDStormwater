@@ -7,11 +7,51 @@ import pandas as pd
 
 logging.basicConfig(level=logging.INFO)
 
-def fetch_municipal_boundary(municipality_code):
-    url = f"https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/arcgis/rest/services/NJ_Municipalities_3857/FeatureServer/0/query?where=MUN_CODE%20%3D%20'{municipality_code}'&outFields=*&outSR=4326&f=json"
-    response = requests.get(url)
+def fetch_county_boundary(county_name, output_folder):
+    # Encode the county name to be URL-safe
+    encoded_county_name = urllib.parse.quote(f"County of {county_name}")
+
+    # Define the URL for the ArcGIS REST service
+    url = (f"https://maps.nj.gov/arcgis/rest/services/Framework/Government_Boundaries/MapServer/1/query"
+           f"?where=GNIS_NAME+%3D+%27{encoded_county_name}%27&text=&objectIds=&time=&timeRelation=esriTimeRelationOverlaps"
+           "&geometry=&geometryType=esriGeometryPolygon&inSR=&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot"
+           "&relationParam=&outFields=*&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR="
+           "&havingClause=&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics="
+           "&returnZ=false&returnM=false&gdbVersion=&historicMoment=&returnDistinctValues=false&resultOffset=&resultRecordCount="
+           "&returnExtentOnly=false&sqlFormat=none&datumTransformation=&parameterValues=&rangeValues=&quantizationParameters="
+           "&featureEncoding=esriDefault&f=geojson")
+
+    # Make the request to the API
+    response = requests.get(url, verify=False)
     response.raise_for_status()
-    return response.json()
+    data = response.json()
+
+    # Check if features are returned
+    if not data['features']:
+        logging.error("No features found for the specified query.")
+        logging.error(f"Response data: {data}")
+        return None
+
+    # Convert the features to a GeoDataFrame
+    gdf = gpd.GeoDataFrame.from_features(data['features'])
+
+    # Set the geometry column if it exists
+    if 'geometry' in gdf:
+        gdf.set_geometry('geometry', inplace=True)
+
+    # Ensure the output folder exists
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    # Define the output file path
+    output_filename = f"County_of_{county_name}_boundary.shp"
+    output_path = os.path.join(output_folder, output_filename)
+
+    # Save the GeoDataFrame as a shapefile
+    gdf.to_file(output_path, driver='ESRI Shapefile')
+    logging.info(f"Data saved successfully to {output_path}")
+
+    return output_path
 
 def fetch_parcels(municipality_code):
     url = f"https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/arcgis/rest/services/Hosted_Parcels_Test_WebMer_20201016/FeatureServer/0/query?where=PCL_MUN%20%3D%20'{municipality_code}'&outFields=*&outSR=4326&f=json"
