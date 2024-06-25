@@ -1,32 +1,37 @@
 import geopandas as gpd
-from shapely.geometry import shape
+import os
 import logging
 
-def create_geodataframe(features):
-    """Convert GeoJSON features to a GeoDataFrame, handling invalid geometries"""
-    geometries = []
-    valid_features = []
+def check_crs(shapefile, target_crs="EPSG:4326"):
+    try:
+        gdf = gpd.read_file(shapefile)
+        return gdf.crs == target_crs
+    except Exception as e:
+        logging.error(f"An error occurred while checking CRS: {e}")
+        return False
 
-    for feature in features:
-        try:
-            geom = shape(feature["geometry"])
-            geometries.append(geom)
-            valid_features.append(feature)
-        except Exception as e:
-            logging.warning(f"Invalid geometry skipped: {feature['geometry']} Error: {e}")
+def reproject_shapefile(input_shapefile, output_shapefile, target_crs="EPSG:4326"):
+    try:
+        logging.info(f"Reprojecting {input_shapefile} to {target_crs}...")
+        gdf = gpd.read_file(input_shapefile)
+        gdf = gdf.to_crs(target_crs)
+        gdf.to_file(output_shapefile)
+        logging.info(f"Reprojected shapefile saved as {output_shapefile}")
+        return output_shapefile
+    except Exception as e:
+        logging.error(f"An error occurred while reprojecting shapefile: {e}")
+        return None
 
-    if not valid_features:
-        raise ValueError("No valid geometries found in the provided GeoJSON data")
+def clip_shapefile(input_shapefile, boundary_shapefile, output_shapefile):
+    try:
+        logging.info(f"Clipping {input_shapefile} to {boundary_shapefile}...")
+        gdf = gpd.read_file(input_shapefile)
+        boundary_gdf = gpd.read_file(boundary_shapefile)
 
-    gdf = gpd.GeoDataFrame.from_features(valid_features)
-    return gdf
-
-def save_shapefile(gdf, folder_path, filename):
-    """Save GeoDataFrame as a shapefile"""
-    shapefile_path = f"{folder_path}/{filename}.shp"
-    gdf.to_file(shapefile_path)
-    return shapefile_path
-
-def clip_to_boundary(geo_df, boundary_gdf):
-    """Clip GeoDataFrame to the boundary of another GeoDataFrame"""
-    return gpd.clip(geo_df, boundary_gdf)
+        clipped_gdf = gpd.clip(gdf, boundary_gdf)
+        clipped_gdf.to_file(output_shapefile)
+        logging.info(f"Clipped shapefile saved as {output_shapefile}")
+        return output_shapefile
+    except Exception as e:
+        logging.error(f"An error occurred while clipping shapefile: {e}")
+        return None

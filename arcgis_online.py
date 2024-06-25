@@ -3,7 +3,7 @@ import pandas as pd
 
 def create_arcgis_group(username, password, group_name):
     # Log in to ArcGIS Online
-    gis = GIS("https://www.arcgis.com", username, password)
+    gis = GIS("https://temple.maps.arcgis.com", username, password)
 
     # Create a new group
     group_properties = {
