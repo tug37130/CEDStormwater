@@ -88,20 +88,45 @@ def run_process(wetlands_file, output_folder, county_name, municipality_code, gn
 
         logging.info("Fetching county boundary data from ArcGIS REST service...")
         fetch_county_boundary(county_name, output_folder)
-        municipality_boundary_file = os.path.join(output_folder, f"County_of_{county_name}_boundary.shp")
+        county_boundary_file = os.path.join(output_folder, f"County_of_{county_name}_boundary.shp")
         logging.info("County boundary data fetched and saved successfully")
+
+        logging.info("Reprojecting county boundary to target CRS if necessary...")
+        county_boundary_file = ensure_crs(county_boundary_file, f"reprojected_County_of_{county_name}_boundary.shp")
+        logging.info("County boundary reprojected successfully")
 
         logging.info("Fetching parcels data from ArcGIS REST service...")
         fetch_parcels(municipality_code, output_folder)
         parcels_file = os.path.join(output_folder, "parcels_boundary.shp")
         logging.info("Parcels data fetched and saved successfully")
 
-        logging.info("Clipping parcels layer to municipal boundary...")
-        clipped_parcels_file = clip_shapefile(parcels_file, municipality_boundary_file, os.path.join(output_folder, "clipped_parcels.shp"))
+        logging.info("Reprojecting parcels to target CRS if necessary...")
+        parcels_file = ensure_crs(parcels_file, "reprojected_parcels_boundary.shp")
+        logging.info("Parcels reprojected successfully")
+
+        logging.info("Fetching roads data from ArcGIS REST service...")
+        roads_gdf = fetch_roads(
+            "https://maps.nj.gov/arcgis/rest/services/Framework/Transportation/MapServer/14",
+            f"COUNTY_L='{gnis_code}'"
+        )
+        roads_file = os.path.join(output_folder, "fetched_roads.shp")
+        roads_gdf.to_file(roads_file)
+        logging.info("Roads data fetched and saved successfully")
+
+        logging.info("Reprojecting roads to target CRS if necessary...")
+        roads_file = ensure_crs(roads_file, "reprojected_roads.shp")
+        logging.info("Roads reprojected successfully")
+
+        logging.info("Clipping roads layer to county boundary...")
+        clipped_roads_file = clip_shapefile(roads_file, county_boundary_file, os.path.join(output_folder, "clipped_roads.shp"))
+        logging.info("Roads layer clipped successfully")
+
+        logging.info("Clipping parcels layer to county boundary...")
+        clipped_parcels_file = clip_shapefile(parcels_file, county_boundary_file, os.path.join(output_folder, "clipped_parcels.shp"))
         logging.info("Parcels layer clipped successfully")
 
-        logging.info("Clipping wetlands layer to municipal boundary...")
-        clipped_wetlands_file = clip_shapefile(wetlands_file, municipality_boundary_file, os.path.join(output_folder, "clipped_wetlands.shp"))
+        logging.info("Clipping wetlands layer to county boundary...")
+        clipped_wetlands_file = clip_shapefile(wetlands_file, county_boundary_file, os.path.join(output_folder, "clipped_wetlands.shp"))
         logging.info("Wetlands layer clipped successfully")
 
         username = simpledialog.askstring("Input", "Enter your ArcGIS Online username:")
@@ -117,7 +142,7 @@ def run_process(wetlands_file, output_folder, county_name, municipality_code, gn
         logging.info("Users added to group successfully")
 
         logging.info("Uploading shapefiles to ArcGIS Online...")
-        upload_shapefiles(group, [clipped_parcels_file, clipped_wetlands_file])
+        upload_shapefiles(group, [clipped_roads_file, clipped_parcels_file, clipped_wetlands_file])
         logging.info("Shapefiles uploaded to ArcGIS Online successfully")
 
         log_operations(output_folder, group.title)
