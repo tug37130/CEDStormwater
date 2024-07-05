@@ -14,6 +14,13 @@ def reproject_shapefile(input_shapefile, output_shapefile, target_crs="EPSG:4326
     try:
         logging.info(f"Reprojecting {input_shapefile} to {target_crs}...")
         gdf = gpd.read_file(input_shapefile)
+        
+        # Set CRS if not set
+        if gdf.crs is None:
+            logging.info(f"Setting CRS for {input_shapefile} to WGS84 (EPSG:4326)...")
+            gdf.set_crs("EPSG:4326", inplace=True)
+        
+        # Reproject to target CRS
         gdf = gdf.to_crs(target_crs)
         gdf.to_file(output_shapefile)
         logging.info(f"Reprojected shapefile saved as {output_shapefile}")
