@@ -15,12 +15,10 @@ def reproject_shapefile(input_shapefile, output_shapefile, target_crs="EPSG:4326
         logging.info(f"Reprojecting {input_shapefile} to {target_crs}...")
         gdf = gpd.read_file(input_shapefile)
         
-        # Set CRS if not set
         if gdf.crs is None:
             logging.info(f"Setting CRS for {input_shapefile} to WGS84 (EPSG:4326)...")
             gdf.set_crs("EPSG:4326", inplace=True)
         
-        # Reproject to target CRS
         gdf = gdf.to_crs(target_crs)
         gdf.to_file(output_shapefile)
         logging.info(f"Reprojected shapefile saved as {output_shapefile}")
@@ -36,6 +34,11 @@ def clip_shapefile(input_shapefile, boundary_shapefile, output_shapefile):
         boundary_gdf = gpd.read_file(boundary_shapefile)
 
         clipped_gdf = gpd.clip(gdf, boundary_gdf)
+        
+        output_folder = os.path.dirname(output_shapefile)
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+
         clipped_gdf.to_file(output_shapefile)
         logging.info(f"Clipped shapefile saved as {output_shapefile}")
         return output_shapefile

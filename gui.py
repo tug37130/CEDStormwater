@@ -1,18 +1,16 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 from geo_processor import reproject_shapefile, check_crs, clip_shapefile
-from arcgis_online import create_arcgis_group, add_users, upload_shapefiles
 from logger import log_operations
+from api_handler import fetch_county_boundary, fetch_parcels, fetch_roads, fetch_municipality_boundary
 import logging
 import os
 import webbrowser
 import sys
-from api_handler import fetch_roads, fetch_county_boundary, fetch_parcels
 
 logging.basicConfig(level=logging.INFO)
 
 def resource_path(relative_path):
-    """ Get absolute path to resource, works for dev and for PyInstaller """
     try:
         base_path = sys._MEIPASS
     except Exception:
@@ -59,21 +57,31 @@ def launch_gui():
     municipality_code = tk.StringVar()
     tk.Entry(root, textvariable=municipality_code, width=50).grid(row=4, column=1)
 
-    tk.Label(root, text="GNIS Code for County").grid(row=5, column=0, sticky="e")
+    tk.Label(root, text="Municipality Name").grid(row=5, column=0, sticky="e")
+    municipality_name = tk.StringVar()
+    tk.Entry(root, textvariable=municipality_name, width=50).grid(row=5, column=1)
+
+    tk.Label(root, text="GNIS Code for County").grid(row=6, column=0, sticky="e")
     gnis_code = tk.StringVar()
-    tk.Entry(root, textvariable=gnis_code, width=50).grid(row=5, column=1)
+    tk.Entry(root, textvariable=gnis_code, width=50).grid(row=6, column=1)
+
+    tk.Label(root, text="Project Number").grid(row=7, column=0, sticky="e")
+    project_number = tk.StringVar()
+    tk.Entry(root, textvariable=project_number, width=50).grid(row=7, column=1)
 
     tk.Button(root, text="Run", command=lambda: run_process(
         wetlands_file.get(),
         output_folder.get(),
         county_name.get(),
         municipality_code.get(),
-        gnis_code.get()
-    )).grid(row=6, column=1, pady=(10, 10))
+        municipality_name.get(),
+        gnis_code.get(),
+        project_number.get()
+    )).grid(row=8, column=1, pady=(10, 10))
 
     root.mainloop()
 
-def run_process(wetlands_file, output_folder, county_name, municipality_code, gnis_code):
+def run_process(wetlands_file, output_folder, county_name, municipality_code, municipality_name, gnis_code, project_number):
     try:
         target_crs = "EPSG:4326"
 
@@ -87,65 +95,59 @@ def run_process(wetlands_file, output_folder, county_name, municipality_code, gn
         wetlands_file = ensure_crs(wetlands_file, "reprojected_wetlands.shp")
 
         logging.info("Fetching county boundary data from ArcGIS REST service...")
-        fetch_county_boundary(county_name, output_folder)
-        county_boundary_file = os.path.join(output_folder, f"County_of_{county_name}_boundary.shp")
+        county_boundary_file = fetch_county_boundary(county_name, output_folder, project_number)
         logging.info("County boundary data fetched and saved successfully")
 
         logging.info("Reprojecting county boundary to target CRS if necessary...")
-        county_boundary_file = ensure_crs(county_boundary_file, f"reprojected_County_of_{county_name}_boundary.shp")
+        county_boundary_file = ensure_crs(county_boundary_file, f"reprojected_County_of_{county_name}_Boundary_{project_number}.shp")
         logging.info("County boundary reprojected successfully")
 
         logging.info("Fetching parcels data from ArcGIS REST service...")
-        fetch_parcels(municipality_code, output_folder)
-        parcels_file = os.path.join(output_folder, "parcels_boundary.shp")
+        parcels_file = fetch_parcels(municipality_code, output_folder, project_number)
         logging.info("Parcels data fetched and saved successfully")
 
         logging.info("Reprojecting parcels to target CRS if necessary...")
-        parcels_file = ensure_crs(parcels_file, "reprojected_parcels_boundary.shp")
+        parcels_file = ensure_crs(parcels_file, f"reprojected_Parcels_{project_number}.shp")
         logging.info("Parcels reprojected successfully")
 
         logging.info("Fetching roads data from ArcGIS REST service...")
-        roads_gdf = fetch_roads(
-            "https://maps.nj.gov/arcgis/rest/services/Framework/Transportation/MapServer/14",
-            f"COUNTY_L='{gnis_code}'"
-        )
-        roads_file = os.path.join(output_folder, "fetched_roads.shp")
-        roads_gdf.to_file(roads_file)
+        roads_file = fetch_roads(gnis_code, output_folder, project_number)
         logging.info("Roads data fetched and saved successfully")
 
         logging.info("Reprojecting roads to target CRS if necessary...")
-        roads_file = ensure_crs(roads_file, "reprojected_roads.shp")
+        roads_file = ensure_crs(roads_file, f"reprojected_Roads_{project_number}.shp")
         logging.info("Roads reprojected successfully")
 
-        logging.info("Clipping roads layer to county boundary...")
-        clipped_roads_file = clip_shapefile(roads_file, county_boundary_file, os.path.join(output_folder, "clipped_roads.shp"))
+        logging.info("Fetching municipality boundary data from ArcGIS REST service...")
+        municipality_boundary_file = fetch_municipality_boundary(municipality_code, output_folder, municipality_name, project_number)
+        logging.info("Municipality boundary data fetched and saved successfully")
+
+        logging.info("Reprojecting municipality boundary to target CRS if necessary...")
+        municipality_boundary_file = ensure_crs(municipality_boundary_file, f"reprojected_{municipality_name.replace(' ', '_')}_Boundary_{project_number}.shp")
+        logging.info("Municipality boundary reprojected successfully")
+
+        logging.info("Clipping roads layer to municipality boundary...")
+        clipped_roads_file = clip_shapefile(roads_file, municipality_boundary_file, os.path.join(output_folder, f"Roads_{project_number}", f"Roads_{project_number}.shp"))
         logging.info("Roads layer clipped successfully")
 
-        logging.info("Clipping parcels layer to county boundary...")
-        clipped_parcels_file = clip_shapefile(parcels_file, county_boundary_file, os.path.join(output_folder, "clipped_parcels.shp"))
+        logging.info("Clipping parcels layer to municipality boundary...")
+        clipped_parcels_file = clip_shapefile(parcels_file, municipality_boundary_file, os.path.join(output_folder, f"Parcels_{project_number}", f"Parcels_{project_number}.shp"))
         logging.info("Parcels layer clipped successfully")
 
-        logging.info("Clipping wetlands layer to county boundary...")
-        clipped_wetlands_file = clip_shapefile(wetlands_file, county_boundary_file, os.path.join(output_folder, "clipped_wetlands.shp"))
+        logging.info("Clipping wetlands layer to municipality boundary...")
+        clipped_wetlands_file = clip_shapefile(wetlands_file, municipality_boundary_file, os.path.join(output_folder, f"Wetlands_{project_number}", f"Wetlands_{project_number}.shp"))
         logging.info("Wetlands layer clipped successfully")
 
-        username = simpledialog.askstring("Input", "Enter your ArcGIS Online username:")
-        password = simpledialog.askstring("Input", "Enter your ArcGIS Online password:", show='*')
-        group_name = simpledialog.askstring("Input", "Enter the name for the new ArcGIS Online group:")
+        for file_path in [county_boundary_file, parcels_file, roads_file, municipality_boundary_file, wetlands_file]:
+            try:
+                os.remove(file_path)
+                for ext in ['.cpg', '.dbf', '.prj', '.shx']:
+                    os.remove(file_path.replace('.shp', ext))
+                logging.info(f"Removed intermediary file: {file_path}")
+            except Exception as e:
+                logging.error(f"An error occurred while removing {file_path.replace('.shp', ext)}: {e}")
 
-        logging.info("Creating ArcGIS group...")
-        group = create_arcgis_group(username, password, group_name)
-        logging.info("ArcGIS group created successfully")
-
-        logging.info("Adding users to group...")
-        add_users(group, "users.xlsx")
-        logging.info("Users added to group successfully")
-
-        logging.info("Uploading shapefiles to ArcGIS Online...")
-        upload_shapefiles(group, [clipped_roads_file, clipped_parcels_file, clipped_wetlands_file])
-        logging.info("Shapefiles uploaded to ArcGIS Online successfully")
-
-        log_operations(output_folder, group.title)
+        log_operations(output_folder, project_number)
         logging.info("Process completed successfully")
     except Exception as e:
         logging.error(f"An error occurred: {e}")
