@@ -170,3 +170,46 @@ def fetch_municipality_boundary(municipality_code, output_folder, municipality_n
     gdf.to_file(output_path, driver='ESRI Shapefile')
     print(f"Data saved successfully to {output_path}")
     return output_path
+
+def fetch_wetlands_within_boundary(boundary_gdf, output_folder, project_number):
+    url = "https://mapsdep.nj.gov/arcgis/rest/services/Features/Land_lu/MapServer/2/query"
+
+    bounds = boundary_gdf.total_bounds
+    bbox = {
+        "xmin": bounds[0],
+        "ymin": bounds[1],
+        "xmax": bounds[2],
+        "ymax": bounds[3],
+        "spatialReference": {"wkid": 4326}
+    }
+
+    params = {
+        "where": "1=1",
+        "geometryType": "esriGeometryEnvelope",
+        "spatialRel": "esriSpatialRelIntersects",
+        "geometry": json.dumps(bbox),
+        "outFields": "*",
+        "returnGeometry": "true",
+        "f": "geojson"
+    }
+
+    response = requests.post(url, data=params, verify=False)
+    response.raise_for_status()
+    data = response.json()
+
+    if not data['features']:
+        print("No features found for the specified query.")
+        print("Response data:", data)
+        return None
+
+    wetlands_gdf = gpd.GeoDataFrame.from_features(data['features'])
+
+    wetlands_output_folder = os.path.join(output_folder, f"Wetlands_{project_number}")
+    if not os.path.exists(wetlands_output_folder):
+        os.makedirs(wetlands_output_folder)
+
+    wetlands_output_filename = f"Wetlands_{project_number}.shp"
+    wetlands_output_path = os.path.join(wetlands_output_folder, wetlands_output_filename)
+    wetlands_gdf.to_file(wetlands_output_path, driver='ESRI Shapefile')
+    print(f"Data saved successfully to {wetlands_output_path}")
+    return wetlands_output_path

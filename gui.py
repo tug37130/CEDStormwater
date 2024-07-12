@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 from geo_processor import reproject_shapefile, check_crs, clip_shapefile
 from logger import log_operations
-from api_handler import fetch_county_boundary, fetch_parcels, fetch_roads, fetch_municipality_boundary
+from api_handler import fetch_county_boundary, fetch_parcels, fetch_roads, fetch_municipality_boundary, fetch_wetlands_within_boundary
 import logging
 import os
 import webbrowser
@@ -25,10 +25,6 @@ def launch_gui():
     def open_link(event):
         webbrowser.open_new(r"https://njogis-newjersey.opendata.arcgis.com/datasets/5f45e1ece6e14ef5866974a7b57d3b95/explore?showTable=true")
 
-    def select_file(var):
-        file_selected = filedialog.askopenfilename(filetypes=[("Shapefiles", "*.shp")])
-        var.set(file_selected)
-
     def select_output_folder():
         folder_selected = filedialog.askdirectory()
         output_folder.set(folder_selected)
@@ -39,49 +35,43 @@ def launch_gui():
     link.grid(row=0, column=2, pady=(10, 10))
     link.bind("<Button-1>", open_link)
 
-    tk.Label(root, text="Wetlands Layer").grid(row=1, column=0, sticky="e")
-    wetlands_file = tk.StringVar()
-    tk.Entry(root, textvariable=wetlands_file, width=50).grid(row=1, column=1)
-    tk.Button(root, text="Browse", command=lambda: select_file(wetlands_file)).grid(row=1, column=2)
-
-    tk.Label(root, text="Output Folder").grid(row=2, column=0, sticky="e")
+    tk.Label(root, text="Output Folder").grid(row=1, column=0, sticky="e")
     output_folder = tk.StringVar()
-    tk.Entry(root, textvariable=output_folder, width=50).grid(row=2, column=1)
-    tk.Button(root, text="Browse", command=select_output_folder).grid(row=2, column=2)
+    tk.Entry(root, textvariable=output_folder, width=50).grid(row=1, column=1)
+    tk.Button(root, text="Browse", command=select_output_folder).grid(row=1, column=2)
 
-    tk.Label(root, text="County Name (ex: Atlantic)").grid(row=3, column=0, sticky="e")
+    tk.Label(root, text="County Name (ex: Atlantic)").grid(row=2, column=0, sticky="e")
     county_name = tk.StringVar()
-    tk.Entry(root, textvariable=county_name, width=50).grid(row=3, column=1)
+    tk.Entry(root, textvariable=county_name, width=50).grid(row=2, column=1)
 
-    tk.Label(root, text="Municipality Code").grid(row=4, column=0, sticky="e")
+    tk.Label(root, text="Municipality Code").grid(row=3, column=0, sticky="e")
     municipality_code = tk.StringVar()
-    tk.Entry(root, textvariable=municipality_code, width=50).grid(row=4, column=1)
+    tk.Entry(root, textvariable=municipality_code, width=50).grid(row=3, column=1)
 
-    tk.Label(root, text="Municipality Name").grid(row=5, column=0, sticky="e")
+    tk.Label(root, text="Municipality Name").grid(row=4, column=0, sticky="e")
     municipality_name = tk.StringVar()
-    tk.Entry(root, textvariable=municipality_name, width=50).grid(row=5, column=1)
+    tk.Entry(root, textvariable=municipality_name, width=50).grid(row=4, column=1)
 
-    tk.Label(root, text="GNIS Code for County").grid(row=6, column=0, sticky="e")
+    tk.Label(root, text="GNIS Code for County").grid(row=5, column=0, sticky="e")
     gnis_code = tk.StringVar()
-    tk.Entry(root, textvariable=gnis_code, width=50).grid(row=6, column=1)
+    tk.Entry(root, textvariable=gnis_code, width=50).grid(row=5, column=1)
 
-    tk.Label(root, text="Project Number").grid(row=7, column=0, sticky="e")
+    tk.Label(root, text="Project Number").grid(row=6, column=0, sticky="e")
     project_number = tk.StringVar()
-    tk.Entry(root, textvariable=project_number, width=50).grid(row=7, column=1)
+    tk.Entry(root, textvariable=project_number, width=50).grid(row=6, column=1)
 
     tk.Button(root, text="Run", command=lambda: run_process(
-        wetlands_file.get(),
         output_folder.get(),
         county_name.get(),
         municipality_code.get(),
         municipality_name.get(),
         gnis_code.get(),
         project_number.get()
-    )).grid(row=8, column=1, pady=(10, 10))
+    )).grid(row=7, column=1, pady=(10, 10))
 
     root.mainloop()
 
-def run_process(wetlands_file, output_folder, county_name, municipality_code, municipality_name, gnis_code, project_number):
+def run_process(output_folder, county_name, municipality_code, municipality_name, gnis_code, project_number):
     try:
         target_crs = "EPSG:4326"
 
@@ -92,7 +82,6 @@ def run_process(wetlands_file, output_folder, county_name, municipality_code, mu
             return file_path
 
         logging.info("Checking and reprojecting shapefiles to target CRS if necessary...")
-        wetlands_file = ensure_crs(wetlands_file, "reprojected_wetlands.shp")
 
         logging.info("Fetching county boundary data from ArcGIS REST service...")
         county_boundary_file = fetch_county_boundary(county_name, output_folder, project_number)
@@ -126,6 +115,11 @@ def run_process(wetlands_file, output_folder, county_name, municipality_code, mu
         municipality_boundary_file = ensure_crs(municipality_boundary_file, f"reprojected_{municipality_name.replace(' ', '_')}_Boundary_{project_number}.shp")
         logging.info("Municipality boundary reprojected successfully")
 
+        logging.info("Fetching wetlands data from ArcGIS REST service...")
+        municipality_boundary_gdf = gpd.read_file(municipality_boundary_file)
+        wetlands_file = fetch_wetlands_within_boundary(municipality_boundary_gdf, output_folder, project_number)
+        logging.info(f"Wetlands data fetched and saved successfully: {wetlands_file}")
+
         logging.info("Clipping roads layer to municipality boundary...")
         clipped_roads_file = clip_shapefile(roads_file, municipality_boundary_file, os.path.join(output_folder, f"Roads_{project_number}", f"Roads_{project_number}.shp"))
         logging.info("Roads layer clipped successfully")
@@ -134,11 +128,7 @@ def run_process(wetlands_file, output_folder, county_name, municipality_code, mu
         clipped_parcels_file = clip_shapefile(parcels_file, municipality_boundary_file, os.path.join(output_folder, f"Parcels_{project_number}", f"Parcels_{project_number}.shp"))
         logging.info("Parcels layer clipped successfully")
 
-        logging.info("Clipping wetlands layer to municipality boundary...")
-        clipped_wetlands_file = clip_shapefile(wetlands_file, municipality_boundary_file, os.path.join(output_folder, f"Wetlands_{project_number}", f"Wetlands_{project_number}.shp"))
-        logging.info("Wetlands layer clipped successfully")
-
-        for file_path in [county_boundary_file, parcels_file, roads_file, municipality_boundary_file, wetlands_file]:
+        for file_path in [county_boundary_file, parcels_file, roads_file, municipality_boundary_file]:
             try:
                 os.remove(file_path)
                 for ext in ['.cpg', '.dbf', '.prj', '.shx']:
