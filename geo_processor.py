@@ -2,6 +2,7 @@ import geopandas as gpd
 import os
 import logging
 
+# Ensure each file is saved as 4326.
 def check_crs(shapefile, target_crs="EPSG:4326"):
     try:
         gdf = gpd.read_file(shapefile)
@@ -10,6 +11,7 @@ def check_crs(shapefile, target_crs="EPSG:4326"):
         logging.error(f"An error occurred while checking CRS: {e}")
         return False
 
+# Project the file if needed.
 def reproject_shapefile(input_shapefile, output_shapefile, target_crs="EPSG:4326"):
     try:
         logging.info(f"Reprojecting {input_shapefile} to {target_crs}...")
@@ -27,6 +29,7 @@ def reproject_shapefile(input_shapefile, output_shapefile, target_crs="EPSG:4326
         logging.error(f"An error occurred while reprojecting shapefile: {e}")
         return None
 
+# Clip the layer if needed.
 def clip_shapefile(input_shapefile, boundary_shapefile, output_shapefile):
     try:
         logging.info(f"Clipping {input_shapefile} to {boundary_shapefile}...")
