@@ -1,5 +1,6 @@
 import datetime
 
+# Create an output text file in the output_folder that logs basic information such as the project number, output folder, time of completion, and API resources.
 def log_operations(output_folder, project_number):
     with open(f"{output_folder}/SWAuto_Log_{project_number}.txt", "w") as log_file:
         log_file.write(f"Operations Log - {datetime.datetime.now()}\n")

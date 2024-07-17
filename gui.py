@@ -3,6 +3,7 @@ from tkinter import filedialog, messagebox, simpledialog
 from geo_processor import reproject_shapefile, check_crs, clip_shapefile
 from logger import log_operations
 from api_handler import fetch_county_boundary, fetch_parcels, fetch_roads, fetch_municipality_boundary, fetch_wetlands_within_boundary
+import geopandas as gpd
 import logging
 import os
 import webbrowser
@@ -18,6 +19,7 @@ def resource_path(relative_path):
 
     return os.path.join(base_path, relative_path)
 
+# Define GUI formatting
 def launch_gui():
     root = tk.Tk()
     root.title("Geo Processing Application")
@@ -35,6 +37,7 @@ def launch_gui():
     link.grid(row=0, column=2, pady=(10, 10))
     link.bind("<Button-1>", open_link)
 
+    # GUI inputs and labels
     tk.Label(root, text="Output Folder").grid(row=1, column=0, sticky="e")
     output_folder = tk.StringVar()
     tk.Entry(root, textvariable=output_folder, width=50).grid(row=1, column=1)
@@ -60,6 +63,7 @@ def launch_gui():
     project_number = tk.StringVar()
     tk.Entry(root, textvariable=project_number, width=50).grid(row=6, column=1)
 
+    # Defining the run_process and setting user variables
     tk.Button(root, text="Run", command=lambda: run_process(
         output_folder.get(),
         county_name.get(),
@@ -71,6 +75,7 @@ def launch_gui():
 
     root.mainloop()
 
+# Execute the application code
 def run_process(output_folder, county_name, municipality_code, municipality_name, gnis_code, project_number):
     try:
         target_crs = "EPSG:4326"
@@ -81,6 +86,8 @@ def run_process(output_folder, county_name, municipality_code, municipality_name
                 return reproject_shapefile(file_path, output_path, target_crs)
             return file_path
 
+        # Basic logging for testing purposes.
+        # Once each file is obtained, a new subfolder will be created using the file's name (i.e. LAYER_PROJECTNUMBER)
         logging.info("Checking and reprojecting shapefiles to target CRS if necessary...")
 
         logging.info("Fetching county boundary data from ArcGIS REST service...")
@@ -128,6 +135,7 @@ def run_process(output_folder, county_name, municipality_code, municipality_name
         clipped_parcels_file = clip_shapefile(parcels_file, municipality_boundary_file, os.path.join(output_folder, f"Parcels_{project_number}", f"Parcels_{project_number}.shp"))
         logging.info("Parcels layer clipped successfully")
 
+        # Remove intermediary files from the base output_folder. This way, all saved files will only exist in their proper subfolders.
         for file_path in [county_boundary_file, parcels_file, roads_file, municipality_boundary_file]:
             try:
                 os.remove(file_path)
@@ -137,6 +145,7 @@ def run_process(output_folder, county_name, municipality_code, municipality_name
             except Exception as e:
                 logging.error(f"An error occurred while removing {file_path.replace('.shp', ext)}: {e}")
 
+        # Basic operations log to ensure the process was run successfully. If an error occured, print the error for further inspection.
         log_operations(output_folder, project_number)
         logging.info("Process completed successfully")
     except Exception as e:
