@@ -240,3 +240,44 @@ def fetch_wetlands_within_boundary(boundary_gdf, output_folder, project_number):
     wetlands_gdf.to_file(wetlands_output_path, driver='ESRI Shapefile')
     print(f"Data saved successfully to {wetlands_output_path}")
     return wetlands_output_path
+
+# Function to fetch neighboring municipalities
+def fetch_neighboring_municipalities(boundary_gdf, output_folder, project_number):
+    url = "https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/ArcGIS/rest/services/NJ_Municipal_Boundaries_3424/FeatureServer/0/query"
+    bounds = boundary_gdf.total_bounds
+    bbox = {
+        "xmin": bounds[0],
+        "ymin": bounds[1],
+        "xmax": bounds[2],
+        "ymax": bounds[3],
+        "spatialReference": {"wkid": 4326}
+    }
+    params = {
+        "where": "1=1",
+        "geometryType": "esriGeometryEnvelope",
+        "spatialRel": "esriSpatialRelIntersects",
+        "geometry": json.dumps(bbox),
+        "outFields": "*",
+        "returnGeometry": "true",
+        "f": "geojson"
+    }
+    response = requests.post(url, data=params, verify=False)
+    response.raise_for_status()
+    data = response.json()
+    if not data['features']:
+        print("No features found for the specified query.")
+        print("Response data:", data)
+        return None
+    neighboring_gdf = gpd.GeoDataFrame.from_features(data['features'])
+
+    # Set or create the subfolder.
+    neighboring_output_folder = os.path.join(output_folder, f"Neighboring_Municipalities_{project_number}")
+    if not os.path.exists(neighboring_output_folder):
+        os.makedirs(neighboring_output_folder)
+
+    # Save the neighboring municipalities layer as a shapefile.
+    neighboring_output_filename = f"Neighboring_Municipalities_{project_number}.shp"
+    neighboring_output_path = os.path.join(neighboring_output_folder, neighboring_output_filename)
+    neighboring_gdf.to_file(neighboring_output_path, driver='ESRI Shapefile')
+    print(f"Data saved successfully to {neighboring_output_path}")
+    return neighboring_output_path
