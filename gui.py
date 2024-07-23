@@ -9,6 +9,7 @@ from api_handler import (
     fetch_municipality_boundary,
     fetch_wetlands_within_boundary,
     fetch_neighboring_municipalities,
+    fetch_waterbodies_within_boundary
 )
 import geopandas as gpd
 import logging
@@ -19,17 +20,13 @@ import shutil
 
 logging.basicConfig(level=logging.INFO)
 
-
 def resource_path(relative_path):
     try:
         base_path = sys._MEIPASS
     except Exception:
         base_path = os.path.abspath(".")
-
     return os.path.join(base_path, relative_path)
 
-
-# Define GUI formatting
 def launch_gui():
     root = tk.Tk()
     root.title("Geo Processing Application")
@@ -47,7 +44,6 @@ def launch_gui():
     link.grid(row=0, column=2, pady=(10, 10))
     link.bind("<Button-1>", open_link)
 
-    # GUI inputs and labels
     tk.Label(root, text="Output Folder").grid(row=1, column=0, sticky="e")
     output_folder = tk.StringVar()
     tk.Entry(root, textvariable=output_folder, width=50).grid(row=1, column=1)
@@ -73,7 +69,6 @@ def launch_gui():
     project_number = tk.StringVar()
     tk.Entry(root, textvariable=project_number, width=50).grid(row=6, column=1)
 
-    # Defining the run_process and setting user variables
     tk.Button(
         root,
         text="Run",
@@ -89,14 +84,15 @@ def launch_gui():
 
     root.mainloop()
 
-
-# Execute the application code
 def run_process(
     output_folder, county_name, municipality_code, municipality_name, gnis_code, project_number
 ):
     created_files = []
     wetlands_files = []
     neighboring_files = []
+    waterbodies_files = []
+    parcels_files = []
+    roads_files = []
 
     try:
         target_crs = "EPSG:4326"
@@ -133,7 +129,9 @@ def run_process(
             parcels_file = fetch_parcels(municipality_code, output_folder, project_number)
             if parcels_file is None:
                 raise ValueError("Error: Please ensure municipality code is correct")
-            created_files.append(parcels_file)
+            parcels_files.append(parcels_file)
+            for ext in [".cpg", ".dbf", ".prj", ".shx"]:
+                parcels_files.append(parcels_file.replace(".shp", ext))
             logging.info("Parcels data fetched and saved successfully")
         except Exception as e:
             raise ValueError("Error: Please ensure municipality code is correct") from e
@@ -147,7 +145,9 @@ def run_process(
             roads_file = fetch_roads(gnis_code, output_folder, project_number)
             if roads_file is None:
                 raise ValueError("Error: Please ensure GNIS code is correct")
-            created_files.append(roads_file)
+            roads_files.append(roads_file)
+            for ext in [".cpg", ".dbf", ".prj", ".shx"]:
+                roads_files.append(roads_file.replace(".shp", ext))
             logging.info("Roads data fetched and saved successfully")
         except Exception as e:
             raise ValueError("Error: Please ensure GNIS code is correct") from e
@@ -206,6 +206,20 @@ def run_process(
         except Exception as e:
             raise ValueError("Error: Failed to fetch neighboring municipalities data") from e
 
+        logging.info("Fetching waterbodies data from ArcGIS REST service...")
+        try:
+            waterbodies_file = fetch_waterbodies_within_boundary(
+                municipality_boundary_gdf, output_folder, project_number
+            )
+            if waterbodies_file is None:
+                raise ValueError("Error: Failed to fetch waterbodies data")
+            waterbodies_files.append(waterbodies_file)
+            for ext in [".cpg", ".dbf", ".prj", ".shx"]:
+                waterbodies_files.append(waterbodies_file.replace(".shp", ext))
+            logging.info(f"Waterbodies data fetched and saved successfully: {waterbodies_file}")
+        except Exception as e:
+            raise ValueError("Error: Failed to fetch waterbodies data") from e
+
         logging.info("Clipping roads layer to municipality boundary...")
         clipped_roads_file = clip_shapefile(
             roads_file,
@@ -224,7 +238,6 @@ def run_process(
         )
         logging.info("Parcels layer clipped successfully")
 
-        # Move all reprojected and clipped files to their respective subfolders
         for file_path in created_files:
             try:
                 dir_name = os.path.basename(file_path).replace("reprojected_", "").replace(
@@ -269,7 +282,48 @@ def run_process(
             except Exception as e:
                 logging.error(f"An error occurred while moving neighboring municipalities file: {e}")
 
-        # Remove intermediary files from the base output_folder. This way, all saved files will only exist in their proper subfolders.
+        for file_path in waterbodies_files:
+            try:
+                dir_name = f"Waterbodies_{project_number}"
+                layer_output_folder = os.path.join(output_folder, dir_name)
+                if not os.path.exists(layer_output_folder):
+                    os.makedirs(layer_output_folder)
+                for ext in [".shp", ".cpg", ".dbf", ".prj", ".shx"]:
+                    base_file = file_path.replace(".shp", ext)
+                    if os.path.exists(base_file):
+                        shutil.move(base_file, os.path.join(layer_output_folder, os.path.basename(base_file)))
+                logging.info(f"Moved files to: {layer_output_folder}")
+            except Exception as e:
+                logging.error(f"An error occurred while moving waterbodies file: {e}")
+
+        for file_path in parcels_files:
+            try:
+                dir_name = f"Parcels_{project_number}"
+                layer_output_folder = os.path.join(output_folder, dir_name)
+                if not os.path.exists(layer_output_folder):
+                    os.makedirs(layer_output_folder)
+                for ext in [".shp", ".cpg", ".dbf", ".prj", ".shx"]:
+                    base_file = file_path.replace(".shp", ext)
+                    if os.path.exists(base_file):
+                        shutil.move(base_file, os.path.join(layer_output_folder, os.path.basename(base_file)))
+                logging.info(f"Moved files to: {layer_output_folder}")
+            except Exception as e:
+                logging.error(f"An error occurred while moving parcels file: {e}")
+
+        for file_path in roads_files:
+            try:
+                dir_name = f"Roads_{project_number}"
+                layer_output_folder = os.path.join(output_folder, dir_name)
+                if not os.path.exists(layer_output_folder):
+                    os.makedirs(layer_output_folder)
+                for ext in [".shp", ".cpg", ".dbf", ".prj", ".shx"]:
+                    base_file = file_path.replace(".shp", ext)
+                    if os.path.exists(base_file):
+                        shutil.move(base_file, os.path.join(layer_output_folder, os.path.basename(base_file)))
+                logging.info(f"Moved files to: {layer_output_folder}")
+            except Exception as e:
+                logging.error(f"An error occurred while moving roads file: {e}")
+
         for file_path in created_files:
             try:
                 os.remove(file_path)
@@ -279,7 +333,6 @@ def run_process(
             except Exception as e:
                 logging.error(f"An error occurred while removing {file_path}: {e}")
 
-        # Remove empty directories
         for root, dirs, files in os.walk(output_folder):
             for dir in dirs:
                 dir_path = os.path.join(root, dir)
@@ -287,7 +340,6 @@ def run_process(
                     os.rmdir(dir_path)
                     logging.info(f"Removed empty directory: {dir_path}")
 
-        # Basic operations log to ensure the process was run successfully. If an error occurred, print the error for further inspection.
         log_operations(output_folder, project_number)
         logging.info("Process completed successfully")
 
@@ -295,7 +347,6 @@ def run_process(
         logging.error(f"An error occurred: {e}")
         messagebox.showerror("Error", str(e))
 
-        # Cleanup created files if an error occurs
         for file_path in created_files:
             try:
                 if os.path.exists(file_path):
@@ -322,7 +373,30 @@ def run_process(
             except Exception as ex:
                 logging.error(f"An error occurred while deleting neighboring municipalities file {file_path}: {ex}")
 
-        # Cleanup directories
+        for file_path in waterbodies_files:
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    logging.info(f"Removed waterbodies file due to error: {file_path}")
+            except Exception as ex:
+                logging.error(f"An error occurred while deleting waterbodies file {file_path}: {ex}")
+
+        for file_path in parcels_files:
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    logging.info(f"Removed parcels file due to error: {file_path}")
+            except Exception as ex:
+                logging.error(f"An error occurred while deleting parcels file {file_path}: {ex}")
+
+        for file_path in roads_files:
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    logging.info(f"Removed roads file due to error: {file_path}")
+            except Exception as ex:
+                logging.error(f"An error occurred while deleting roads file {file_path}: {ex}")
+
         for root, dirs, files in os.walk(output_folder):
             for dir in dirs:
                 dir_path = os.path.join(root, dir)
@@ -331,7 +405,6 @@ def run_process(
                     logging.info(f"Removed directory due to error: {dir_path}")
                 except Exception as ex:
                     logging.error(f"An error occurred while deleting directory {dir_path}: {ex}")
-
 
 if __name__ == "__main__":
     launch_gui()
