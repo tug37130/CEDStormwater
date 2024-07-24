@@ -62,7 +62,23 @@ User Inputs:
 ## Troubleshooting
 
 Common Issues and Resolution:
-- 
+
+"Error: Please ensure county name is correct."
+- The county name given is incorrect.
+    - The county name you put in should not include "County of ..." or "... County." Please list only the proper name of the county (ex: "Atlantic")
+    - This could also be a simple misspelling of the county name.
+ 
+"Error: Please ensure municipality code is correct."
+- The municipality code given is incorrect.
+    - This should be a four digit code. (ex: "0102" for Atlantic City)
+    - This could also be a simple mistype.
+
+"Error: Please ensure GNIS code is correct."
+- The GNIS code is incorrect.
+    - This should be a six-digit code. (ex: "882270" for Atlantic County)
+    - This could also be a simple mistype.
+ 
+NOTE: Once an error dialogue is given, clicking the "Ok" button will remove any previously created files and keep the application open. Once the error dialogue is closed the given error can be fixed and can be re-run.
 ##
 ## Frequently Asked Questions (FAQ)
 
@@ -78,4 +94,5 @@ Where do the files go once the application is ran?
 
 Is the data updated automatically?
 - The application will always use the newest data available through the API.
+##
 
