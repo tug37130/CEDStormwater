@@ -18,8 +18,10 @@ import webbrowser
 import sys
 import shutil
 
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 
+# Function to get the resource path
 def resource_path(relative_path):
     try:
         base_path = sys._MEIPASS
@@ -27,48 +29,64 @@ def resource_path(relative_path):
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
+# Launch the GUI
 def launch_gui():
     root = tk.Tk()
-    root.title("Geo Processing Application")
+    root.title("Stormwater Layer Generator")
 
+    # Function to open a link to the documentation
     def open_link(event):
         webbrowser.open_new(r"https://github.com/tug37130/CEDStormwater/blob/main/README.md")
 
+    # Function to select the output folder
     def select_output_folder():
         folder_selected = filedialog.askdirectory()
         output_folder.set(folder_selected)
 
-    description = tk.Label(root, text="Please refer to the application's documentation")
-    description.grid(row=0, column=0, columnspan=2, pady=(10, 10))
-    link = tk.Label(root, text="documentation", fg="blue", cursor="hand2")
-    link.grid(row=0, column=2, pady=(10, 10))
+    # Create and place widgets in the GUI
+    # Create a frame to hold the description and ReadMe link
+    frame = tk.Frame(root)
+    frame.grid(row=0, column=0, columnspan=3, pady=(10, 10))
+
+    description = tk.Label(frame, text="For more information, please refer to the application's")
+    description.pack(side=tk.LEFT)
+
+    link = tk.Label(frame, text="ReadMe", fg="blue", cursor="hand2")
+    link.pack(side=tk.LEFT)
     link.bind("<Button-1>", open_link)
 
+    # Output folder dialogue
     tk.Label(root, text="Output Folder").grid(row=1, column=0, sticky="e")
     output_folder = tk.StringVar()
     tk.Entry(root, textvariable=output_folder, width=50).grid(row=1, column=1)
     tk.Button(root, text="Browse", command=select_output_folder).grid(row=1, column=2)
 
+    # County name dialouge
     tk.Label(root, text="County Name (ex: Atlantic)").grid(row=2, column=0, sticky="e")
     county_name = tk.StringVar()
     tk.Entry(root, textvariable=county_name, width=50).grid(row=2, column=1)
 
+    # Municipality code dialogue
     tk.Label(root, text="Municipality Code").grid(row=3, column=0, sticky="e")
     municipality_code = tk.StringVar()
     tk.Entry(root, textvariable=municipality_code, width=50).grid(row=3, column=1)
 
+    # Municipality name dialogue
     tk.Label(root, text="Municipality Name").grid(row=4, column=0, sticky="e")
     municipality_name = tk.StringVar()
     tk.Entry(root, textvariable=municipality_name, width=50).grid(row=4, column=1)
 
+    # GNIS dialogue
     tk.Label(root, text="GNIS Code for County").grid(row=5, column=0, sticky="e")
     gnis_code = tk.StringVar()
     tk.Entry(root, textvariable=gnis_code, width=50).grid(row=5, column=1)
 
+    # Project number dialogue
     tk.Label(root, text="Project Number").grid(row=6, column=0, sticky="e")
     project_number = tk.StringVar()
     tk.Entry(root, textvariable=project_number, width=50).grid(row=6, column=1)
 
+    # Initiate application once the "Run" button is clicked
     tk.Button(
         root,
         text="Run",
@@ -84,6 +102,14 @@ def launch_gui():
 
     root.mainloop()
 
+# Function to display the success message
+def show_success_message(output_folder):
+    success_window = tk.Toplevel()
+    success_window.title("Process Complete")
+    tk.Label(success_window, text=f"Application complete: data saved in {output_folder}").pack(pady=20, padx=20)
+    tk.Button(success_window, text="OK", command=success_window.destroy).pack(pady=(0, 20))
+
+# Primary function to run the application
 def run_process(
     output_folder, county_name, municipality_code, municipality_name, gnis_code, project_number
 ):
@@ -97,6 +123,7 @@ def run_process(
     try:
         target_crs = "EPSG:4326"
 
+        # Function to ensure the CRS of a file is correct
         def ensure_crs(file_path, output_name):
             if not check_crs(file_path, target_crs):
                 output_path = os.path.join(output_folder, output_name)
@@ -106,6 +133,7 @@ def run_process(
 
         logging.info("Checking and reprojecting shapefiles to target CRS if necessary...")
 
+        # Fetch and process county boundary data
         logging.info("Fetching county boundary data from ArcGIS REST service...")
         try:
             county_boundary_file = fetch_county_boundary(
@@ -124,6 +152,7 @@ def run_process(
         )
         logging.info("County boundary reprojected successfully")
 
+        # Fetch and process parcels data
         logging.info("Fetching parcels data from ArcGIS REST service...")
         try:
             parcels_file = fetch_parcels(municipality_code, output_folder, project_number)
@@ -140,6 +169,7 @@ def run_process(
         parcels_file = ensure_crs(parcels_file, f"reprojected_Parcels_{project_number}.shp")
         logging.info("Parcels reprojected successfully")
 
+        # Fetch and process roads data
         logging.info("Fetching roads data from ArcGIS REST service...")
         try:
             roads_file = fetch_roads(gnis_code, output_folder, project_number)
@@ -156,6 +186,7 @@ def run_process(
         roads_file = ensure_crs(roads_file, f"reprojected_Roads_{project_number}.shp")
         logging.info("Roads reprojected successfully")
 
+        # Fetch and process municipality boundary data
         logging.info("Fetching municipality boundary data from ArcGIS REST service...")
         try:
             municipality_boundary_file = fetch_municipality_boundary(
@@ -175,6 +206,7 @@ def run_process(
         )
         logging.info("Municipality boundary reprojected successfully")
 
+        # Fetch and process wetlands data
         logging.info("Fetching wetlands data from ArcGIS REST service...")
         try:
             municipality_boundary_gdf = gpd.read_file(municipality_boundary_file)
@@ -190,6 +222,7 @@ def run_process(
         except Exception as e:
             raise ValueError("Error: Failed to fetch wetlands data") from e
 
+        # Fetch and process neighboring municipalities data
         logging.info("Fetching neighboring municipalities data from ArcGIS REST service...")
         try:
             neighboring_file = fetch_neighboring_municipalities(
@@ -206,6 +239,7 @@ def run_process(
         except Exception as e:
             raise ValueError("Error: Failed to fetch neighboring municipalities data") from e
 
+        # Fetch and process waterbodies
         logging.info("Fetching waterbodies data from ArcGIS REST service...")
         try:
             waterbodies_file = fetch_waterbodies_within_boundary(
@@ -220,6 +254,7 @@ def run_process(
         except Exception as e:
             raise ValueError("Error: Failed to fetch waterbodies data") from e
 
+        # Clip roads layer to municipality boundary
         logging.info("Clipping roads layer to municipality boundary...")
         clipped_roads_file = clip_shapefile(
             roads_file,
@@ -228,6 +263,7 @@ def run_process(
         )
         logging.info("Roads layer clipped successfully")
 
+        # Clip parcels layer to municipality boundary
         logging.info("Clipping parcels layer to municipality boundary...")
         clipped_parcels_file = clip_shapefile(
             parcels_file,
@@ -238,6 +274,7 @@ def run_process(
         )
         logging.info("Parcels layer clipped successfully")
 
+        # Move and organize files into subfolders using the given file's basename. Ensure data does not appear in the output folder location.
         for file_path in created_files:
             try:
                 dir_name = os.path.basename(file_path).replace("reprojected_", "").replace(
@@ -324,6 +361,7 @@ def run_process(
             except Exception as e:
                 logging.error(f"An error occurred while moving roads file: {e}")
 
+        # Remove intermediary files (ex: reprojected/clipped layers)
         for file_path in created_files:
             try:
                 os.remove(file_path)
@@ -333,6 +371,7 @@ def run_process(
             except Exception as e:
                 logging.error(f"An error occurred while removing {file_path}: {e}")
 
+        # Remove empty directories if necessary
         for root, dirs, files in os.walk(output_folder):
             for dir in dirs:
                 dir_path = os.path.join(root, dir)
@@ -342,11 +381,15 @@ def run_process(
 
         log_operations(output_folder, project_number)
         logging.info("Process completed successfully")
+        
+        # Show success message
+        show_success_message(output_folder)
 
     except Exception as e:
         logging.error(f"An error occurred: {e}")
         messagebox.showerror("Error", str(e))
 
+        # If the application does not run properly, remove any created files. Ensure the user does not need to manually remove any files that were created.
         for file_path in created_files:
             try:
                 if os.path.exists(file_path):
