@@ -16,7 +16,7 @@ This module requires installation of the following modules:
 - sys (provides access to some variables used or maintained by the interpreter: [documentation](https://docs.python.org/3/library/sys.html))
 - os (provides a portable way of using operating system dependent functionality: [documentation](https://docs.python.org/3/library/os.html))
 ##
-## Installation (Needs updating)
+## Installation
 
 If running the executable:
 1. Download and Save the .exe File
