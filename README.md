@@ -20,7 +20,7 @@ This module requires installation of the following modules:
 
 If running the executable:
 1. Download and Save the .exe File
-    - In the GitHub repository, select and download the .exe file. This will be labeled as "INSERTFINALNAMEHERE"
+    - In the GitHub repository, select and download the .exe file. This will be labeled as "SWLayerGenerator"
     - Save the executable to an accessible location such as your Desktop or Documents.
         - Please refrain from saving this in a project folder.
 
