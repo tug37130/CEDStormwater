@@ -1,0 +1,19 @@
+{
+  "name": "RoadSegmentsFilter",
+  "label": "Road Segments Filter",
+  "type": "widget",
+  "framework": "jimu-framework",
+  "version": "1.0.0",
+  "exbVersion": "1.7.0",
+  "author": "Colliers Engineering & Design",
+  "description": "A widget to filter road segments.",
+  "dependency": "jimu-arcgis",
+  "properties": {
+    "useMapWidgetIds": []
+  },
+  "translatedLocales": ["en"],
+  "defaultSize": {
+    "width": 400,
+    "height": 50
+  }
+}
